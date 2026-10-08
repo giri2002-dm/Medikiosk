@@ -1533,7 +1533,34 @@ function staff(){shell(t('staff'),`<div class="card form"><label>${t('staffEmail
 async function staffLogin(){const r=await post('/api/auth/login',{type:'STAFF',email:se.value,password:sp.value});if(!r.success)return alert(r.error);A.token=r.access_token;A.role='TRIAGE';localStorage.mk_token=A.token;staffDash()}
 async function staffDash(){const r=await get('/api/triage/cases');if(!r.success)return alert(r.error);const alerts=r.cases.filter(c=>['HIGH','URGENT'].includes(c.priority)).map(c=>`<div class="alert"><b>${esc(c.case_number)}</b> • ${esc(c.priority)}<span>${esc(c.status)}</span><br><small>Safety attention required</small></div>`).join('')||'<div class="empty">No active red-flag alerts</div>';shell(t('staff'),`<div class="card"><h3>🚨 Safety alerts</h3>${alerts}</div><div class="card"><h3>Patient queue</h3>${r.cases.map(c=>`<div class="row"><b>${esc(c.case_number)}</b><span>${esc(c.priority)} • ${esc(c.recommended_department||'')}</span><span>${esc(c.status)}</span></div>`).join('')}</div>`)}
 function admin(){shell(t('admin'),`<div class="card form"><label>${t('adminEmail')}<input id="ae" value="admin@hospital.local"></label><label>${t('adminPass')}<input id="ap" type="password"></label><button class="primary" onclick="adminLogin()">${t('login')}</button></div>`)}
-async function adminLogin(){const r=await post('/api/auth/login',{type:'ADMIN',email:ae.value,password:ap.value});if(!r.success)return alert(r.error);A.token=r.access_token;A.role='ADMIN';localStorage.mk_token=A.token;adminDash()}
+async function adminLogin() {
+    try {
+        const r = await post('/api/auth/login', {
+            type: 'ADMIN',
+            email: ae.value.trim(),
+            password: ap.value
+        });
+
+        console.log("ADMIN LOGIN RESPONSE:", r);
+
+        if (!r.success) {
+            alert(r.error || 'Login failed');
+            return;
+        }
+
+        A.token = r.access_token;
+        A.role = 'ADMIN';
+
+        localStorage.setItem('mk_token', r.access_token);
+        localStorage.setItem('mk_role', 'ADMIN');
+
+        await adminDash();
+
+    } catch (error) {
+        console.error("ADMIN LOGIN ERROR:", error);
+        alert("Login request failed:\n" + error.message);
+    }
+}
 async function adminDash(){const r=await get('/api/admin/state');if(!r.success)return alert(r.error);const deps=r.departments.map(d=>`<div class="row"><b>${esc(d.name)}</b><span>${esc(d.email||'')}</span><span>${d.is_active?'ACTIVE':'INACTIVE'}</span><button onclick="changeDept(${d.id})">Edit login</button></div>`).join('');shell(t('admin'),`<div class="stats"><div><b>${r.stats.departments}</b><span>Departments</span></div><div><b>${r.stats.patients}</b><span>Patients</span></div><div><b>${r.stats.cases}</b><span>Cases</span></div></div><div class="card"><h3>${t('manage')}</h3>${deps}<hr><h3>${t('create')}</h3><div class="grid2"><input id="nd" placeholder="${t('deptName')}"><input id="ne" placeholder="${t('newEmail')}"><input id="np" placeholder="${t('newPass')}" type="password"><input id="ns" placeholder="Doctor name"></div><button class="primary" onclick="createDept()">${t('create')}</button></div><div class="card"><h3>${t('audit')}</h3>${r.audit.map(x=>`<div class="row"><span>${esc(x.created_at||'')}</span><span>${esc(x.user_id||'')}</span><span>${esc(x.action||'')}</span></div>`).join('')}</div>`)}
 async function createDept(){const r=await post('/api/admin/department',{name:nd.value,email:ne.value,password:np.value,doctor_name:ns.value});if(!r.success)return alert(r.error);adminDash()}
 async function changeDept(id){const email=prompt('New department/doctor email (leave blank to keep current):','');const password=prompt('New password (8+ chars, leave blank to keep current):','');if(!email&&!password)return;const r=await fetch('/api/admin/department/'+id,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+A.token},body:JSON.stringify({email,password})}).then(x=>x.json());if(!r.success)return alert(r.error);adminDash()}
